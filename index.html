@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Elite Trading Platform</title>
+<title>Investment Platform</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <style>
@@ -13,11 +13,7 @@ background:#0b0f1a;
 color:white;
 }
 
-.container{
-max-width:900px;
-margin:auto;
-padding:20px;
-}
+.container{max-width:900px;margin:auto;padding:20px;}
 
 .card{
 background:#141b2d;
@@ -30,8 +26,8 @@ input,select,button{
 width:100%;
 padding:10px;
 margin:5px 0;
-border:none;
 border-radius:5px;
+border:none;
 }
 
 button{
@@ -101,7 +97,7 @@ h1,h2{color:#00ffcc;}
 </div>
 
 <!-- ADMIN -->
-<button id="adminButton" style="display:none;" onclick="openAdmin()">
+<button id="adminBtn" style="display:none;" onclick="openAdmin()">
 Admin Panel
 </button>
 
@@ -114,15 +110,12 @@ Admin Panel
 
 </div>
 
-<!-- FIREBASE -->
-<script type="module">
+<!-- FIREBASE COMPAT SDK (IMPORTANT FIX) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged }
-from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-
-import { getDatabase, ref, set, get, update, push, onValue }
-from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+<script>
 
 /* FIREBASE CONFIG */
 const firebaseConfig = {
@@ -131,23 +124,24 @@ authDomain: "YOUR_PROJECT.firebaseapp.com",
 databaseURL: "YOUR_DB_URL",
 projectId: "YOUR_PROJECT",
 storageBucket: "YOUR_PROJECT.appspot.com",
-messagingSenderId: "ID",
-appId: "APP_ID"
+appId: "YOUR_APP_ID"
 };
 
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getDatabase(app);
+firebase.initializeApp(firebaseConfig);
+
+const auth = firebase.auth();
+const db = firebase.database();
 
 /* REGISTER */
-window.register = async function(){
+function register(){
 
-const email = document.getElementById("email").value;
-const password = document.getElementById("password").value;
+let email = document.getElementById("email").value;
+let password = document.getElementById("password").value;
 
-const user = await createUserWithEmailAndPassword(auth,email,password);
+auth.createUserWithEmailAndPassword(email,password)
+.then(user=>{
 
-await set(ref(db,"users/"+user.user.uid),{
+db.ref("users/"+user.user.uid).set({
 balance:0,
 profit:0,
 role:"user"
@@ -155,38 +149,42 @@ role:"user"
 
 alert("Registered");
 
+});
+
 }
 
 /* LOGIN */
-window.login = async function(){
+function login(){
 
-const email = document.getElementById("email").value;
-const password = document.getElementById("password").value;
+let email = document.getElementById("email").value;
+let password = document.getElementById("password").value;
 
-await signInWithEmailAndPassword(auth,email,password);
-
-}
-
-/* USER STATE */
-onAuthStateChanged(auth, async(user)=>{
-
-if(user){
-
-const snap = await get(ref(db,"users/"+user.uid));
-
-if(snap.exists()){
-
-const data = snap.val();
+auth.signInWithEmailAndPassword(email,password)
+.then(()=>{
 
 document.getElementById("loginBox").classList.add("hidden");
 document.getElementById("dashboard").classList.remove("hidden");
 
+});
+
+}
+
+/* USER STATE */
+auth.onAuthStateChanged(async user=>{
+
+if(user){
+
+let snap = await db.ref("users/"+user.uid).get();
+
+if(snap.exists()){
+
+let data = snap.val();
+
 document.getElementById("balance").innerText="$"+data.balance;
 document.getElementById("profit").innerText="$"+data.profit;
 
-/* ADMIN CHECK */
-if(data.role === "admin"){
-document.getElementById("adminButton").style.display="block";
+if(data.role==="admin"){
+document.getElementById("adminBtn").style.display="block";
 }
 
 loadDeposits(user.uid);
@@ -198,43 +196,41 @@ loadDeposits(user.uid);
 });
 
 /* DEPOSIT */
-window.submitDeposit = async function(){
+function submitDeposit(){
 
-const user = auth.currentUser;
+let user = auth.currentUser;
 if(!user) return;
 
-await push(ref(db,"deposits/"+user.uid),{
+db.ref("deposits/"+user.uid).push({
 txid:document.getElementById("txid").value,
 amount:document.getElementById("depositAmount").value,
 method:document.getElementById("depositMethod").value,
-status:"pending",
-time:new Date().toLocaleString()
+status:"pending"
 });
 
-alert("Deposit Sent");
+alert("Deposit sent");
 
 }
 
 /* WITHDRAW */
-window.submitWithdraw = async function(){
+function submitWithdraw(){
 
-const user = auth.currentUser;
+let user = auth.currentUser;
 if(!user) return;
 
-await push(ref(db,"withdrawals/"+user.uid),{
+db.ref("withdrawals/"+user.uid).push({
 amount:document.getElementById("withdrawAmount").value,
 method:document.getElementById("withdrawMethod").value,
 address:document.getElementById("withdrawAddress").value,
-status:"pending",
-time:new Date().toLocaleString()
+status:"pending"
 });
 
-alert("Withdraw Sent");
+alert("Withdraw sent");
 
 }
 
 /* ADMIN PANEL */
-window.openAdmin = function(){
+function openAdmin(){
 document.getElementById("adminPanel").classList.toggle("hidden");
 loadAdmin();
 }
@@ -242,16 +238,16 @@ loadAdmin();
 /* LOAD ADMIN */
 function loadAdmin(){
 
-onValue(ref(db,"deposits"),(snap)=>{
+db.ref("deposits").once("value",snap=>{
 
-const box=document.getElementById("adminDeposits");
+let box=document.getElementById("adminDeposits");
 box.innerHTML="";
 
 snap.forEach(user=>{
 
 user.forEach(dep=>{
 
-const d=dep.val();
+let d=dep.val();
 
 box.innerHTML+=`
 <div class="card">
@@ -271,10 +267,8 @@ box.innerHTML+=`
 /* LOAD USER DEPOSITS */
 function loadDeposits(uid){
 
-onValue(ref(db,"deposits/"+uid),(snap)=>{
-
+db.ref("deposits/"+uid).on("value",snap=>{
 console.log(snap.val());
-
 });
 
 }
